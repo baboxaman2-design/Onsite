@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Intelligence System v8.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        maroon: {
+                            900: '#560015',
+                            800: '#800020',
+                            700: '#9e1b32',
+                            600: '#c21807',
+                            100: '#fce7ea'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; background-color: #f9fafb; }
+        
+        .sidebar-gradient { background: linear-gradient(180deg, #560015 0%, #800020 100%); }
+        
+        .glass-card { 
+            background: rgba(255, 255, 255, 1); 
+            border-radius: 16px; 
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s;
+        }
+        .glass-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+        .chart-center-text {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #9e1b32; border-radius: 3px; }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden text-slate-700">
+
+    <div class="lg:hidden fixed top-0 w-full sidebar-gradient text-white z-50 px-4 py-3 flex justify-between items-center shadow-lg">
+        <span class="font-bold italic text-lg"><i class="fa-solid fa-chart-pie mr-2"></i>ONSITE PRO v8</span>
+        <button onclick="toggleSidebar()"><i class="fa-solid fa-bars text-xl"></i></button>
+    </div>
+
+    <aside id="sidebar" class="fixed lg:relative z-40 w-72 h-full sidebar-gradient text-white flex flex-col transform -translate-x-full lg:translate-x-0 pt-16 lg:pt-0 transition-transform duration-300 shadow-2xl">
+        <div class="p-8 mb-2 hidden lg:block border-b border-white/10">
+            <h1 class="text-3xl font-black italic tracking-tighter">ONSITE <span class="text-red-300">PRO</span></h1>
+            <p class="text-xs text-white/60 mt-1">Service Intelligence v8.0</p>
+        </div>
+        
+        <nav class="flex-1 px-4 py-6 space-y-3">
+            <button onclick="showPage('dash')" id="btn-dash" class="w-full text-left px-5 py-4 rounded-xl transition-all hover:bg-white/10 flex items-center gap-4 bg-white text-maroon-900 shadow-lg font-bold">
+                <i class="fa-solid fa-chart-line w-5"></i> สรุปงานรายเดือน
+            </button>
+            <button onclick="showPage('update')" id="btn-update" class="w-full text-left px-5 py-4 rounded-xl transition-all hover:bg-white/10 flex items-center gap-4 text-white/80 font-medium">
+                <i class="fa-solid fa-pen-to-square w-5"></i> อัพเดทงาน/Note
+            </button>
+            <button onclick="showPage('issues')" id="btn-issues" class="w-full text-left px-5 py-4 rounded-xl transition-all hover:bg-white/10 flex items-center gap-4 text-white/80 font-medium">
+                <i class="fa-solid fa-screwdriver-wrench w-5"></i> บันทึกปัญหา (Log)
+            </button>
+        </nav>
+        <div class="p-6 text-xs text-center text-white/40 border-t border-white/10">Soratun Seelueng</div>
+    </aside>
+
+    <div id="overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-30 hidden lg:hidden backdrop-blur-sm"></div>
+
+    <main class="flex-1 h-full overflow-y-auto pt-20 lg:pt-0 bg-slate-50 relative">
+        
+        <div id="page-dash" class="p-6 lg:p-10 max-w-[1800px] mx-auto space-y-8 pb-24">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 bg-slate-50/95 backdrop-blur z-20 py-2 border-b border-slate-200 lg:border-none">
+                <div>
+                    <h2 class="text-3xl font-black text-maroon-900"> (TG)Service Performance Summary Overview</h2>
+                    <p class="text-slate-500 text-sm">รายงานสรุปผลการปฏิบัติงาน</p>
+                </div>
+                <div class="flex gap-3 bg-white p-2 rounded-full shadow-sm border border-slate-200">
+                    <span class="flex items-center pl-3 text-slate-400"><i class="fa-regular fa-calendar-days"></i></span>
+                    <input type="month" id="dash-month-picker" onchange="loadDashboard()" class="border-none bg-transparent font-bold text-maroon-800 outline-none cursor-pointer pr-2">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass-card p-6 border-t-4 border-maroon-800" onclick="showTrendModal('free', 'Onsite-Free รายเดือน', '#10b981')">
+                    <div class="flex justify-between mb-4 items-center">
+                        <span class="font-bold text-maroon-900 text-lg uppercase tracking-tight">Onsite-Free</span>
+                        <div class="bg-maroon-100 p-2 rounded-lg text-maroon-900"><i class="fa-solid fa-gift"></i></div>
+                    </div>
+                    <div class="relative h-56 mb-4">
+                        <canvas id="d-free"></canvas>
+                        <div class="chart-center-text">
+                            <p class="text-[10px] uppercase text-slate-400 font-bold tracking-widest">Total</p>
+                            <p id="sum-free" class="text-4xl font-black text-slate-800">0</p>
+                        </div>
+                    </div>
+                    <div id="legend-free" class="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-50"></div>
+                </div>
+
+                <div class="glass-card p-6 border-t-4 border-blue-800" onclick="showTrendModal('charge', 'Onsite-Charge รายเดือน', '#f97316')">
+                    <div class="flex justify-between mb-4 items-center">
+                        <span class="font-bold text-blue-900 text-lg uppercase tracking-tight">Onsite-Charge</span>
+                        <div class="bg-blue-100 p-2 rounded-lg text-blue-800"><i class="fa-solid fa-dollar-sign"></i></div>
+                    </div>
+                    <div class="relative h-56 mb-4">
+                        <canvas id="d-charge"></canvas>
+                        <div class="chart-center-text">
+                            <p class="text-[10px] uppercase text-slate-400 font-bold tracking-widest">Total</p>
+                            <p id="sum-charge" class="text-4xl font-black text-slate-800">0</p>
+                        </div>
+                    </div>
+                    <div id="legend-charge" class="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-50"></div>
+                </div>
+
+                <div class="glass-card p-6 border-t-4 border-slate-500" onclick="showTrendModal('ma', 'Onsite-MA รายเดือน', '#3b82f6')">
+                    <div class="flex justify-between mb-4 items-center">
+                        <span class="font-bold text-slate-600 text-lg uppercase tracking-tight">Onsite-MA</span>
+                        <div class="bg-slate-100 p-2 rounded-lg text-slate-700"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+                    </div>
+                    <div class="relative h-56 mb-4">
+                        <canvas id="d-ma"></canvas>
+                        <div class="chart-center-text">
+                            <p class="text-[10px] uppercase text-slate-400 font-bold tracking-widest">Total</p>
+                            <p id="sum-ma" class="text-4xl font-black text-slate-800">0</p>
+                        </div>
+                    </div>
+                    <div id="legend-ma" class="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-50"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 <div class="glass-card p-6">
+                    <h3 class="font-bold text-maroon-900 mb-4 flex items-center gap-2 text-sm"><i class="fa-solid fa-arrow-trend-up"></i> รายปี (Free)</h3>
+                    <div class="h-48"><canvas id="c-annual-free"></canvas></div>
+                </div>
+                <div class="glass-card p-6">
+                    <h3 class="font-bold text-blue-900 mb-4 flex items-center gap-2 text-sm"><i class="fa-solid fa-arrow-trend-up"></i> รายปี (Charge)</h3>
+                    <div class="h-48"><canvas id="c-annual-charge"></canvas></div>
+                </div>
+                <div class="glass-card p-6">
+                    <h3 class="font-bold text-slate-600 mb-4 flex items-center gap-2 text-sm"><i class="fa-solid fa-arrow-trend-up"></i> รายปี (MA)</h3>
+                    <div class="h-48"><canvas id="c-annual-ma"></canvas></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 glass-card p-6">
+                    <h3 class="font-bold text-maroon-900 mb-6 flex items-center gap-2"><i class="fa-solid fa-chart-column"></i> สรุปยอดรวมแต่ละเดือน (ปีปัจจุบัน)</h3>
+                    <div class="h-72"><canvas id="c-bar-year"></canvas></div>
+                </div>
+                <div class="lg:col-span-1 glass-card p-6">
+                    <h3 class="font-bold text-maroon-900 mb-4 border-l-4 border-maroon-800 pl-3">สัดส่วนงาน (Ratio)</h3>
+                    <div class="h-60 relative">
+                        <canvas id="c-pie-ratio"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass-card p-6 cursor-pointer hover:bg-white-50/50 transition-colors border border-slate-200 hover:border-red-300" onclick="showDetailModal('Scanner')">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-maroon-900 flex items-center gap-2"><i class="fa-solid fa-barcode"></i> ปัญหา Scanner</h3>
+                        <span class="text-[10px] bg-maroon-100 text-maroon-800 px-2 py-1 rounded font-bold hover:bg-maroon-200">
+                            <i class="fa-solid fa-list mr-1"></i>ดูข้อมูล / Export
+                        </span>
+                    </div>
+                    
+                    <div class="relative h-56 mb-4">
+    <canvas id="d-scan"></canvas>
+    <div class="chart-center-text">
+        <p class="text-[10px] uppercase text-slate-400 font-bold">Total</p>
+        <p id="sum-scan" class="text-4xl font-black text-slate-800">3</p>
+    </div>
+</div>
+<div id="legend-scan" class="flex justify-center gap-4 text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-50"></div>
+                </div>
+
+                <div class="glass-card p-6 cursor-pointer hover:bg-white-50/50 transition-colors border border-slate-200 hover:border-blue-300" onclick="showDetailModal('Power')">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-blue-900 flex items-center gap-2"><i class="fa-solid fa-plug"></i> ปัญหา Power Supply</h3>
+                        <span class="text-[10px] bg-blue-100 text-blue-900 px-2 py-1 rounded font-bold hover:bg-blue-200">
+                            <i class="fa-solid fa-list mr-1"></i>ดูข้อมูล / Export
+                        </span>
+                    </div>
+                   <div class="relative h-56 mb-4">
+    <canvas id="d-power"></canvas>
+    <div class="chart-center-text">
+        <p class="text-[10px] uppercase text-slate-400 font-bold">Total</p>
+        <p id="sum-power" class="text-4xl font-black text-slate-800">2</p>
+    </div>
+</div>
+<div id="legend-power" class="flex justify-center gap-4 text-[11px] font-bold text-slate-500 pt-2 border-t border-slate-50"></div>
+                </div>
+            </div>
+
+            <div class="glass-card p-8 bg-gradient-to-r from-red-50 to-white border-l-8 border-maroon-800">
+                <h3 class="font-black text-maroon-900 text-lg mb-4"><i class="fa-regular fa-comment-dots mr-2"></i>Note / Comment ประจำเดือน</h3>
+                <div id="display-comment" class="text-slate-600 whitespace-pre-wrap leading-relaxed bg-white p-6 rounded-xl border border-slate-100 shadow-inner min-h-[100px]">
+                    - รอการบันทึกข้อมูล -
+                </div>
+            </div>
+        </div>
+
+        <div id="page-update" class="hidden p-6 lg:p-10 max-w-5xl mx-auto pb-24">
+            <div class="glass-card p-8 lg:p-12">
+                <div class="border-b pb-6 mb-8 flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-black text-maroon-900">อัพเดทข้อมูลงาน</h2>
+                        <p class="text-slate-500">บันทึกยอดงานและคอมเมนต์</p>
+                    </div>
+                    <input type="month" id="f-month" onchange="loadDataForEdit()" class="bg-slate-100 border-none p-3 rounded-lg font-bold text-maroon-800 outline-none focus:ring-2 focus:ring-maroon-800">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+    <div class="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-500 space-y-4">
+        <div class="text-blue-600 font-bold text-center mb-2 tracking-wide">ONSITE-CHARGE</div>
+        <input type="number" id="f-c-1" placeholder="ย้ายจุด" class="w-full p-4 bg-white rounded-2xl border border-blue-200 focus:ring-2 focus:ring-blue-400 outline-none text-center">
+        <input type="number" id="f-c-2" placeholder="เช็คระบบ" class="w-full p-4 bg-white rounded-2xl border border-blue-200 focus:ring-2 focus:ring-blue-400 outline-none text-center">
+        <input type="number" id="f-c-3" placeholder="เปลี่ยนอุปกรณ์" class="w-full p-4 bg-white rounded-2xl border border-blue-200 focus:ring-2 focus:ring-blue-400 outline-none text-center">
+    </div>
+
+    <div class="bg-red-50/50 p-6 rounded-[2rem] border border-red-500 space-y-4">
+        <div class="text-maroon-600 font-bold text-center mb-2 tracking-wide">ONSITE-FREE</div>
+        <input type="number" id="f-f-1" placeholder="เช็คอุปกรณ์" class="w-full p-4 bg-white rounded-2xl border border-maroon-200 focus:ring-2 focus:ring-maroon-400 outline-none text-center">
+        <input type="number" id="f-f-2" placeholder="เปลี่ยนอุปกรณ์" class="w-full p-4 bg-white rounded-2xl border border-maroon-200 focus:ring-2 focus:ring-maroon-400 outline-none text-center">
+        <input type="number" id="f-f-3" placeholder="ส่งของ/POC" class="w-full p-4 bg-white rounded-2xl border border-maroon-200 focus:ring-2 focus:ring-maroon-400 outline-none text-center">
+    </div>
+
+    <div class="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-500 space-y-4">
+        <div class="text-slate-600 font-bold text-center mb-2 tracking-wide">ONSITE-MA</div>
+        <input type="number" id="f-m-1" placeholder="MA ประกันอะไหล่" class="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-slate-400 outline-none text-center">
+        <input type="number" id="f-m-2" placeholder="MA ตรวจเช็ค" class="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-slate-400 outline-none text-center">
+        <input type="number" id="f-m-3" placeholder="MA Survey" class="w-full p-4 bg-white rounded-2xl border border-slate-200 focus:ring-2 focus:ring-slate-400 outline-none text-center">
+    </div>
+</div>
+
+                <div class="mb-8">
+                    <label class="block font-bold text-maroon-900 mb-2">Note / Comment</label>
+                    <textarea id="f-comment" rows="4" class="w-full p-4 rounded-xl border border-slate-300 focus:ring-2 focus:ring-maroon-800 outline-none" placeholder="เขียนบันทึกเพิ่มเติมที่นี่..."></textarea>
+                </div>
+
+                <button onclick="saveSummaryData()" class="w-full bg-maroon-800 hover:bg-maroon-900 text-white py-4 rounded-xl font-bold text-lg shadow-lg">
+                    <i class="fa-solid fa-save mr-2"></i> บันทึกข้อมูล
+                </button>
+            </div>
+        </div>
+
+        <div id="page-issues" class="hidden p-6 lg:p-10 max-w-[1600px] mx-auto pb-24">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                <div>
+                    <h2 class="text-2xl font-black text-maroon-900">Device Issue Log</h2>
+                    <p class="text-slate-500 text-sm">บันทึกและจัดการปัญหาอุปกรณ์</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="exportIssues()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg font-bold shadow"><i class="fa-solid fa-file-excel mr-2"></i>Export</button>
+                    <label class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold shadow cursor-pointer">
+                        <i class="fa-solid fa-upload mr-2"></i>Import
+                        <input type="file" class="hidden" accept=".xlsx, .xls" onchange="importIssues(event)">
+                    </label>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <div class="lg:col-span-1">
+                    <div class="glass-card p-6 sticky top-6 bg-white">
+                        <div class="flex justify-between items-center mb-6 pb-4 border-b">
+                            <h3 class="font-bold text-maroon-900" id="form-title">เพิ่มรายการ (New)</h3>
+                            <button onclick="resetForm()" class="text-xs text-slate-400 hover:text-red-500 underline">Reset</button>
+                        </div>
+                        <input type="hidden" id="i-id">
+                        
+                        <div class="space-y-4">
+                            <div><label class="text-xs font-bold text-slate-500">ประเภท</label>
+                                <select id="i-type" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                    <option value="Scanner">Scanner</option>
+                                    <option value="Power">Power Supply</option>
+                                </select>
+                            </div>
+                            <div><label class="text-xs font-bold text-slate-500">วันที่</label>
+                                <input type="date" id="i-date" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                            </div>
+                            <div><label class="text-xs font-bold text-slate-500">ลูกค้า</label>
+                                <input type="text" id="i-company" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div><label class="text-xs font-bold text-slate-500">รุ่น</label>
+                                    <input type="text" id="i-model" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                </div>
+                                <div><label class="text-xs font-bold text-slate-500">S/N</label>
+                                    <input type="text" id="i-sn" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                                </div>
+                            </div>
+                            <div><label class="text-xs font-bold text-slate-500">อาการเสีย</label>
+                                <textarea id="i-symptom" rows="3" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg"></textarea>
+                            </div>
+                            <div><label class="text-xs font-bold text-slate-500">หมวด</label>
+                                <select id="i-cat" class="w-full mt-1 p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-maroon-800">
+                                    <option value="Free">Onsite-Free</option>
+                                    <option value="Charge">Onsite-Charge</option>
+                                </select>
+                            </div>
+                            <button onclick="saveCase()" id="btn-save-case" class="w-full bg-maroon-800 text-white py-3 rounded-lg font-bold shadow hover:bg-maroon-900 mt-2">บันทึก</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-3">
+                    <div class="glass-card overflow-hidden bg-white">
+                        <div class="overflow-x-auto max-h-[700px]">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="sticky top-0 bg-slate-100 z-10 text-xs uppercase text-slate-600 font-bold">
+                                    <tr>
+                                        <th class="p-4 w-28">Actions</th>
+                                        <th class="p-4">Date</th>
+                                        <th class="p-4">Customer</th>
+                                        <th class="p-4">Model / SN</th>
+                                        <th class="p-4">Symptom</th>
+                                        <th class="p-4">Type</th>
+                                        <th class="p-4">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="issue-list" class="text-sm divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="trend-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-[60] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-5xl rounded-2xl p-8 relative shadow-2xl animate-fade-in-up">
+            <button onclick="closeModal('trend-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-red-600 text-2xl"><i class="fa-solid fa-times-circle"></i></button>
+            <h3 id="trend-modal-title" class="text-2xl font-black mb-6 text-maroon-900 border-l-4 border-maroon-800 pl-4 uppercase">Trend Analysis</h3>
+            <div class="h-[400px]"><canvas id="c-trend-line"></canvas></div>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-[60] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-4xl rounded-2xl p-8 relative shadow-2xl animate-fade-in-up flex flex-col max-h-[90vh]">
+            <button onclick="closeModal('detail-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-red-600 text-2xl"><i class="fa-solid fa-times-circle"></i></button>
+            <div class="flex justify-between items-center mb-4 border-b pb-4">
+                <h3 id="detail-modal-title" class="text-2xl font-black text-maroon-900 border-l-4 border-maroon-800 pl-4">Issue Details</h3>
+                <button onclick="exportModalData()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-green-700">
+                    <i class="fa-solid fa-file-excel mr-2"></i>Export List
+                </button>
+            </div>
+            <div class="overflow-y-auto flex-1">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-100 sticky top-0 font-bold text-slate-600">
+                        <tr><th class="p-3">Date</th><th class="p-3">Company</th><th class="p-3">Model</th><th class="p-3">Symptom</th><th class="p-3">Cat</th></tr>
+                    </thead>
+                    <tbody id="detail-modal-list" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAK15WTcs88LT-hiYbmh7o_R8T6J90epl0",
+            authDomain: "summary-report-7492c.firebaseapp.com",
+            projectId: "summary-report-7492c",
+            appId: "1:947062377712:web:aaddc9f606a73c09e04635"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let charts = {};
+        let dbSummary = {}; 
+        let dbCases = [];   
+        let currentEditId = null;
+        let currentModalData = [];
+
+        // --- Navigation ---
+        window.toggleSidebar = () => {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+            document.getElementById('overlay').classList.toggle('hidden');
+        };
+
+        window.showPage = (p) => {
+            if(window.innerWidth < 1024) toggleSidebar();
+            ['dash', 'update', 'issues'].forEach(id => {
+                const el = document.getElementById('page-'+id);
+                const btn = document.getElementById('btn-'+id);
+                const isActive = id === p;
+                el.classList.toggle('hidden', !isActive);
+                if(isActive) {
+                    btn.classList.remove('text-white/80', 'hover:bg-white/10');
+                    btn.classList.add('bg-white', 'text-maroon-900', 'shadow-lg', 'font-bold');
+                } else {
+                    btn.classList.add('text-white/80', 'hover:bg-white/10');
+                    btn.classList.remove('bg-white', 'text-maroon-900', 'shadow-lg', 'font-bold');
+                }
+            });
+            if(p === 'dash') loadDashboard();
+            if(p === 'issues') loadCases();
+            if(p === 'update') loadDataForEdit();
+        };
+
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+
+        // --- Data Logic (Summary) ---
+        window.saveSummaryData = async () => {
+            const m = document.getElementById('f-month').value;
+            if(!m) return Swal.fire('Error', 'กรุณาระบุเดือน/ปี', 'error');
+            
+            const data = {
+                year: m.split('-')[0], month: m.split('-')[1],
+                charge: [parseInt(document.getElementById('f-c-1').value)||0, parseInt(document.getElementById('f-c-2').value)||0, parseInt(document.getElementById('f-c-3').value)||0],
+                free: [parseInt(document.getElementById('f-f-1').value)||0, parseInt(document.getElementById('f-f-2').value)||0, parseInt(document.getElementById('f-f-3').value)||0],
+                ma: [parseInt(document.getElementById('f-m-1').value)||0, parseInt(document.getElementById('f-m-2').value)||0, parseInt(document.getElementById('f-m-3').value)||0],
+                comment: document.getElementById('f-comment').value || ""
+            };
+
+            await setDoc(doc(db, "Service_Intelligence_V5", m), data);
+            Swal.fire('Saved!', 'บันทึกข้อมูลสำเร็จ', 'success');
+            if(!document.getElementById('page-dash').classList.contains('hidden')) loadDashboard();
+        };
+
+        window.loadDataForEdit = async () => {
+            const m = document.getElementById('f-month').value;
+            if(!m) return;
+            const snap = await getDoc(doc(db, "Service_Intelligence_V5", m));
+            if(snap.exists()) {
+                const d = snap.data();
+                [1,2,3].forEach(i => {
+                    document.getElementById(`f-c-${i}`).value = d.charge[i-1];
+                    document.getElementById(`f-f-${i}`).value = d.free[i-1];
+                    document.getElementById(`f-m-${i}`).value = d.ma[i-1];
+                });
+                document.getElementById('f-comment').value = d.comment || "";
+            } else {
+                document.querySelectorAll('#page-update input[type="number"], #page-update textarea').forEach(el => el.value = '');
+            }
+        };
+
+        // --- Dashboard Logic ---
+        window.loadDashboard = async () => {
+            // Fetch All Summaries
+            const snap = await getDocs(collection(db, "Service_Intelligence_V5"));
+            dbSummary = {};
+            snap.forEach(d => dbSummary[d.id] = d.data());
+
+            // 1. Annual Data Aggregation (Free, Charge, MA)
+            const annualStats = {}; 
+            Object.values(dbSummary).forEach(d => {
+                const yr = d.year;
+                if(!annualStats[yr]) annualStats[yr] = { f:0, c:0, m:0 };
+                annualStats[yr].f += d.free.reduce((a,b)=>a+b,0);
+                annualStats[yr].c += d.charge.reduce((a,b)=>a+b,0);
+                annualStats[yr].m += d.ma.reduce((a,b)=>a+b,0);
+            });
+
+            const years = Object.keys(annualStats).sort();
+            const aFree = years.map(y => annualStats[y].f);
+            const aCharge = years.map(y => annualStats[y].c);
+            const aMA = years.map(y => annualStats[y].m);
+
+            // Render Annual Charts (3 Line Charts)
+            renderLineChart('c-annual-free', years, aFree, '#800020', 'Total Free');
+            renderLineChart('c-annual-charge', years, aCharge, '#1e3a8a', 'Total Charge');
+            renderLineChart('c-annual-ma', years, aMA, '#64748b', 'Total MA');
+
+            // --- Monthly Data ---
+            const picker = document.getElementById('dash-month-picker');
+            const [selYear, selMonth] = picker.value.split('-');
+            
+            const curData = dbSummary[picker.value] || { charge:[0,0,0], free:[0,0,0], ma:[0,0,0], comment: "- ไม่มีข้อมูล -" };
+            
+            const sumF = curData.free.reduce((a,b)=>a+b,0);
+            const sumC = curData.charge.reduce((a,b)=>a+b,0);
+            const sumM = curData.ma.reduce((a,b)=>a+b,0);
+            
+            document.getElementById('sum-free').innerText = sumF;
+            document.getElementById('sum-charge').innerText = sumC;
+            document.getElementById('sum-ma').innerText = sumM;
+            document.getElementById('display-comment').innerText = curData.comment || "- ไม่มีบันทึก -";
+
+            const freeLabels = ['เช็คอุปกรณ์', 'เปลี่ยนอุปกรณ์', 'ส่งของ/POC'];
+        const chargeLabels = ['ย้ายจุด', 'เช็คระบบ', 'เปลี่ยนอุปกรณ์'];
+        const maLabels = ['MA ประกันอะไหล่', 'MA ตรวจเช็ค', 'MA Survey'];
+const myColors = ['#4ade80', '#ffb347']; 
+const scanLabels = ['Free', 'Charge']; // ชื่อที่จะให้ปรากฏใต้กราฟ
+
+        renderDonut('d-free', curData.free, ['#800020', '#b91c1c', '#fecaca'], freeLabels, 'legend-free'); 
+        renderDonut('d-charge', curData.charge, ['#1e3a8a', '#3b82f6', '#bfdbfe'], chargeLabels, 'legend-charge'); 
+        renderDonut('d-ma', curData.ma, ['#475569', '#94a3b8', '#e2e8f0'], maLabels, 'legend-ma'); 
+
+            // Yearly Bar Chart (Selected Year)
+            const months = ["01","02","03","04","05","06","07","08","09","10","11","12"];
+            const yearData = { c:[], f:[], m:[] };
+            months.forEach(m => {
+                const d = dbSummary[`${selYear}-${m}`];
+                yearData.c.push(d ? d.charge.reduce((a,b)=>a+b,0) : 0);
+                yearData.f.push(d ? d.free.reduce((a,b)=>a+b,0) : 0);
+                yearData.m.push(d ? d.ma.reduce((a,b)=>a+b,0) : 0);
+            });
+
+            const ctxBar = document.getElementById('c-bar-year').getContext('2d');
+            if(charts.bar) charts.bar.destroy();
+            charts.bar = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+                    datasets: [
+                        { label: 'Free', data: yearData.f, backgroundColor: '#9e1b32', borderRadius:4 },
+                        { label: 'Charge', data: yearData.c, backgroundColor: '#1e3a8a', borderRadius:4 },
+                        { label: 'MA', data: yearData.m, backgroundColor: '#94a3b8', borderRadius:4 }
+                    ]
+                },
+                options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}, datalabels:{display:false}} }
+            });
+
+            // Ratio Pie
+            const ctxPie = document.getElementById('c-pie-ratio').getContext('2d');
+            if(charts.pie) charts.pie.destroy();
+            charts.pie = new Chart(ctxPie, {
+                type: 'pie',
+                data: {
+                    labels: ['Free', 'Charge', 'MA'],
+                    datasets: [{
+                        data: [sumF, sumC, sumM],
+                        backgroundColor: ['#800020', '#1e3a8a', '#a5a5a5'],
+                        borderWidth: 2, borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive:true, maintainAspectRatio:false,
+                    plugins: {
+                        legend: { position:'right' },
+                        datalabels: { color: '#fff', formatter: (val, ctx) => {
+                            let sum = ctx.chart._metasets[ctx.datasetIndex].total;
+                            if(sum===0) return "";
+                            return (val*100/sum).toFixed(1) + "%";
+                        }}
+                    }
+                },
+                plugins: [ChartDataLabels]
+            });
+
+            // Issue Data (Fetch here to ensure Drill-down works)
+            const caseSnap = await getDocs(collection(db, "Device_Log_V5"));
+            dbCases = [];
+            let scan = {f:0, c:0}, power = {f:0, c:0};
+            
+            caseSnap.forEach(doc => {
+                const c = doc.data();
+                c.id = doc.id;
+                dbCases.push(c);
+                if(c.date && c.date.startsWith(picker.value)) {
+                    if(c.type === 'Scanner') c.category === 'Free' ? scan.f++ : scan.c++;
+                    else c.category === 'Free' ? power.f++ : power.c++;
+                }
+            });
+
+            document.getElementById('sum-scan').innerText = scan.f + scan.c;
+            document.getElementById('sum-power').innerText = power.f + power.c;
+
+            renderDonut('d-scan', [scan.f, scan.c], ['#42bd41', '#ffb74d']);
+            renderDonut('d-power', [power.f, power.c], ['#42bd41', '#ffb74d']);
+            renderDonut('d-scan', [scan.f, scan.c], myColors, scanLabels, 'legend-scan');
+renderDonut('d-power', [power.f, power.c], myColors, scanLabels, 'legend-power');
+        };
+
+        // --- Modals Logic ---
+        window.showTrendModal = (type, title, ignoredColor) => {
+    // 1. เปิด Modal และตั้งค่าหัวข้อสไตล์ใหม่ (Italic + Blue Accent)
+    const modal = document.getElementById('trend-modal');
+    modal.classList.remove('hidden');
+    
+    const titleEl = document.getElementById('trend-modal-title');
+    titleEl.innerText = "COMPARISON TREND ANALYSIS";
+    titleEl.className = "text-2xl font-black mb-6 text-slate-800 border-l-4 border-blue-600 pl-4 italic uppercase tracking-wider";
+
+    // 2. ดึงปีทั้งหมดที่มีข้อมูลออกมาเรียงลำดับ
+    const years = [...new Set(Object.values(dbSummary).map(d => d.year))].sort();
+    
+    // 3. สร้าง Dataset โดยคำนวณสีอัตโนมัติ (HSL Color)
+    const datasets = years.map((yr, index) => {
+        // คำนวณค่า Hue (เฉดสี) กระจายตามจำนวนปี (0-360 องศา)
+        const hue = (index * 137.5) % 360; // ใช้ Golden Angle (137.5) เพื่อให้สีที่ออกมาดูต่างกันชัดเจนที่สุด
+        const color = `hsl(${hue}, 70%, 50%)`;
+        const bgColor = `hsla(${hue}, 70%, 50%, 0.15)`; // สีพื้นหลังจางๆ
+
+        return {
+            label: `Year ${yr}`,
+            data: ["01","02","03","04","05","06","07","08","09","10","11","12"].map(m => {
+                const d = dbSummary[`${yr}-${m}`];
+                return d ? d[type].reduce((a,b)=>a+b,0) : 0;
+            }),
+            borderColor: color,
+            borderWidth: 3,
+            tension: 0.4,       // ความโค้งมนของเส้น
+            fill: true,         // เปิดการระบายสีใต้เส้น
+            backgroundColor: bgColor,
+            
+            // ปรับแต่งจุด (Point) ให้เป็นวงกลมขาวขอบสีตามรูป
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: color,
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointHoverBackgroundColor: color
+        };
+    });
+
+    // 4. วาดกราฟลงใน Canvas
+    const ctx = document.getElementById('c-trend-line').getContext('2d');
+    if(charts.trend) charts.trend.destroy();
+    
+    charts.trend = new Chart(ctx, {
+        type: 'line',
+        data: { 
+            labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], 
+            datasets: datasets 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false }, // แสดง Tooltip ทุกปีพร้อมกันเมื่อชี้
+            plugins: { 
+                legend: { 
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        font: { weight: 'bold' },
+                        padding: 20
+                    }
+                },
+                datalabels: { display: false } // ปิดตัวเลขบนกราฟเพื่อให้ดูสะอาดตา
+            },
+            scales: {
+                y: { 
+                    beginAtZero: true,
+                    grid: { color: '#f1f5f9' },
+                    ticks: { font: { size: 11 } }
+                },
+                x: { 
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+};
+
+        window.showDetailModal = (type) => {
+            const picker = document.getElementById('dash-month-picker').value;
+            // Ensure dbCases is populated. If empty (page just loaded), refetch briefly
+            if(dbCases.length === 0) {
+                 Swal.fire({title:'Loading data...', didOpen: async () => {
+                     await loadDashboard(); 
+                     Swal.close();
+                     openDetailModalInner(type, picker);
+                 }});
+            } else {
+                openDetailModalInner(type, picker);
+            }
+        };
+
+        function openDetailModalInner(type, picker) {
+            document.getElementById('detail-modal').classList.remove('hidden');
+            document.getElementById('detail-modal-title').innerText = `${type} Issues`;
+            
+            const filtered = dbCases.filter(c => c.date && c.date.startsWith(picker) && c.type === type);
+            currentModalData = filtered;
+
+            const tbody = document.getElementById('detail-modal-list');
+            tbody.innerHTML = filtered.length ? filtered.map(c => `
+                <tr class="hover:bg-slate-50 border-b border-slate-100">
+                    <td class="p-3">${c.date}</td>
+                    <td class="p-3 font-bold">${c.company}</td>
+                    <td class="p-3 text-xs">${c.model}</td>
+                    <td class="p-3 text-xs text-slate-500">${c.symptom}</td>
+                    <td class="p-3"><span class="px-3 py-1 rounded-full text-[12px] font-bold ${c.category==='Free'?'bg-green-100 text-green-800':'bg-orange-100 text-orange-800'}">${c.category}</span></td>
+                </tr>
+            `).join('') : '<tr><td colspan="5" class="p-4 text-center text-slate-400">ไม่มีข้อมูลในเดือนนี้</td></tr>';
+        }
+
+        window.exportModalData = () => {
+            if(currentModalData.length === 0) return Swal.fire('No Data', 'ไม่มีข้อมูลให้ Export', 'warning');
+            const cleanData = currentModalData.map(c => ({
+                Date: c.date, Company: c.company, Model: c.model, 
+                SN: c.sn, Symptom: c.symptom, Type: c.type, Category: c.category
+            }));
+            const ws = XLSX.utils.json_to_sheet(cleanData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Issue_List");
+            XLSX.writeFile(wb, `Issue_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+        };
+
+        // --- Issue Management (CRUD) ---
+        window.saveCase = async () => {
+            const data = {
+                date: document.getElementById('i-date').value,
+                company: document.getElementById('i-company').value,
+                model: document.getElementById('i-model').value,
+                sn: document.getElementById('i-sn').value || '-',
+                symptom: document.getElementById('i-symptom').value,
+                type: document.getElementById('i-type').value,
+                category: document.getElementById('i-cat').value
+            };
+            if(!data.date || !data.company) return Swal.fire('Warning', 'กรุณากรอกข้อมูลให้ครบ', 'warning');
+
+            if(currentEditId) await updateDoc(doc(db, "Device_Log_V5", currentEditId), data);
+            else await addDoc(collection(db, "Device_Log_V5"), data);
+            
+            Swal.fire('Success', 'บันทึกเรียบร้อย', 'success');
+            resetForm();
+            loadCases();
+        };
+
+        window.loadCases = async () => {
+            const snap = await getDocs(query(collection(db, "Device_Log_V5"), orderBy("date", "desc")));
+            dbCases = [];
+            const list = document.getElementById('issue-list');
+            list.innerHTML = "";
+            snap.forEach(d => {
+                const i = d.data();
+                dbCases.push({...i, id:d.id});
+                list.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                        <td class="p-4 flex gap-2">
+                            <button onclick="editCase('${d.id}')" class="text-navy-800 hover:text-navy-600 bg-navy-100 w-8 h-8 rounded flex items-center justify-center"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteCase('${d.id}')" class="text-red-800 hover:text-red-600 bg-red-100 w-8 h-8 rounded flex items-center justify-center"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                        <td class="p-4">${i.date}</td>
+                        <td class="p-4 font-bold text-maroon-900">${i.company}</td>
+                        <td class="p-4 text-xs"><b>${i.model}</b><br><span class="text-slate-400">SN:${i.sn}</span></td>
+                        <td class="p-4 text-xs text-slate-500">${i.symptom}</td>
+                        <td class="p-4 text-xs">${i.type}</td>
+                        <td class="p-4"><span class="px-3 py-1 rounded-full text-[10px] font-bold ${i.category==='Free'?'bg-green-100 text-green-800':'bg-orange-100 text-orange-800'}">${i.category}</span></td>
+           </tr>`;
+                    });
+        };
+
+        window.deleteCase = async (id) => {
+            const result = await Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: "ข้อมูลจะหายไปอย่างถาวร",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#3085d6',
+                confirmButtonText: 'ลบข้อมูล'
+            });
+
+            if (result.isConfirmed) {
+                await deleteDoc(doc(db, "Device_Log_V5", id));
+                Swal.fire('Deleted!', 'ลบข้อมูลเรียบร้อย', 'success');
+                loadCases();
+            }
+        };
+
+        window.editCase = (id) => {
+            const c = dbCases.find(x => x.id === id);
+            if(!c) return;
+            currentEditId = id;
+            document.getElementById('form-title').innerText = "แก้ไขรายการ (Edit)";
+            document.getElementById('form-title').classList.add('text-navy-800');
+            document.getElementById('btn-save-case').innerText = "อัพเดท";
+            document.getElementById('btn-save-case').classList.replace('bg-maroon-800', 'bg-navy-800');
+            
+            document.getElementById('i-date').value = c.date;
+            document.getElementById('i-company').value = c.company;
+            document.getElementById('i-model').value = c.model;
+            document.getElementById('i-sn').value = c.sn;
+            document.getElementById('i-symptom').value = c.symptom;
+            document.getElementById('i-type').value = c.type;
+            document.getElementById('i-cat').value = c.category;
+        };
+
+        window.resetForm = () => {
+            currentEditId = null;
+            document.getElementById('form-title').innerText = "เพิ่มรายการ (New)";
+            document.getElementById('form-title').classList.remove('text-navy-800');
+            document.getElementById('btn-save-case').innerText = "บันทึก";
+            document.getElementById('btn-save-case').classList.replace('bg-navy-800', 'bg-maroon-800');
+            document.querySelectorAll('#page-issues input, #page-issues textarea').forEach(e => e.value = '');
+        };
+
+        window.exportIssues = () => {
+            const ws = XLSX.utils.json_to_sheet(dbCases.map(c => ({...c, id:undefined})));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Logs");
+            XLSX.writeFile(wb, "Service_Logs.xlsx");
+        };
+
+  window.importIssues = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // แปลงวันที่จาก Excel ให้คง "วัน" เดิมเสมอ (กันปัญหา Timezone ทำให้ -1 วัน)
+    const normalizeExcelDate = (value) => {
+        if (value == null) return "";
+
+        // 1) Date object: avoid timezone -1 day.
+        // Heuristic:
+        // - If the UTC clock time is exactly 00:00:00.000, treat as an Excel-style UTC-midnight date and use UTC parts.
+        // - Otherwise, treat as local-midnight (or local time) and use local parts.
+        if (value instanceof Date && !isNaN(value)) {
+            const isUtcMidnight =
+                value.getUTCHours() === 0 &&
+                value.getUTCMinutes() === 0 &&
+                value.getUTCSeconds() === 0 &&
+                value.getUTCMilliseconds() === 0;
+
+            const y = isUtcMidnight ? value.getUTCFullYear() : value.getFullYear();
+            const m = String((isUtcMidnight ? value.getUTCMonth() : value.getMonth()) + 1).padStart(2, '0');
+            const d = String(isUtcMidnight ? value.getUTCDate() : value.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // 2) Excel serial number (timezone-neutral)
+        if (typeof value === 'number' && isFinite(value)) {
+            const dc = XLSX.SSF.parse_date_code(value);
+            if (dc && dc.y && dc.m && dc.d) {
+                const y = dc.y;
+                const m = String(dc.m).padStart(2, '0');
+                const d = String(dc.d).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+        }
+
+        // 3) Strings (avoid Date("YYYY-MM-DD") pitfalls)
+        if (typeof value === 'string') {
+            const s = value.trim();
+            if (!s) return "";
+
+            // ISO datetime -> take YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+
+            // YYYY-MM-DD
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+            // DD/MM/YYYY or DD-MM-YYYY
+            const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (m1) {
+                const dd = m1[1].padStart(2, '0');
+                const mm = m1[2].padStart(2, '0');
+                const yy = m1[3];
+                return `${yy}-${mm}-${dd}`;
+            }
+
+            // Last resort: parse and normalize to keep the *local* calendar date
+            const dt = new Date(s);
+            if (!isNaN(dt)) {
+                const adj = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000);
+                return adj.toISOString().slice(0, 10);
+            }
+
+            return s;
+        }
+
+        return "";
+    };
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+        // Read with cellDates:false + raw:true so date cells stay as serial numbers (timezone-neutral)
+        const workbook = XLSX.read(evt.target.result, { type: 'binary', cellDates: false });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        // raw:true keeps Excel date cells as serial numbers (timezone-neutral)
+        const data = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+
+        // Debug preview (first 5 rows)
+        try {
+            const preview = data.slice(0, 5).map(r => {
+                const rd = r.date || r.Date;
+                return { raw: rd, rawType: (rd instanceof Date) ? 'Date' : typeof rd, normalized: normalizeExcelDate(rd) };
+            });
+            window.__importPreview = preview;
+            console.table(preview);
+        } catch (err) { /* ignore */ }
+
+        for (let row of data) {
+            const rawDate = row.date || row.Date;
+            let formattedDate = normalizeExcelDate(rawDate);
+
+            if (!formattedDate) {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const d = String(now.getDate()).padStart(2, '0');
+                formattedDate = `${y}-${m}-${d}`;
+            }
+
+            await addDoc(collection(db, "Device_Log_V5"), {
+                date: formattedDate,
+                company: row.company || row.Company || '-',
+                model: row.model || row.Model || '-',
+                symptom: row.symptom || row.Symptom || '-',
+                sn: row.sn || row.SN || '-',
+                type: row.type || row.Type || 'Scanner',
+                category: row.category || row.Category || 'Free'
+            });
+        }
+
+        Swal.fire('Imported', 'นำเข้าข้อมูลเรียบร้อย (แก้ปัญหา Timezone -1 วันแล้ว)', 'success');
+        loadCases();
+    };
+    reader.readAsBinaryString(file);
+};
+
+        // Helpers
+     function renderDonut(id, data, colors, labels, legendId) {
+    const ctx = document.getElementById(id).getContext('2d');
+    if(charts[id]) charts[id].destroy();
+    
+    charts[id] = new Chart(ctx, {
+        type: 'doughnut',
+        data: { 
+            labels: labels,
+            datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] 
+        },
+        options: { 
+            cutout: '75%', 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } } // ซ่อน Legend มาตรฐานของ Chart.js
+        }
+    });
+           const legendEl = document.getElementById(legendId);
+    if(legendEl && labels) {
+        legendEl.innerHTML = labels.map((label, i) => `
+            <div class="flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-sm" style="background-color: ${colors[i]}"></span>
+                <span>${label}</span>
+            </div>
+        `).join('');
+    }
+}
+
+        function renderLineChart(id, labels, data, color, label) {
+            const ctx = document.getElementById(id).getContext('2d');
+            if(charts[id]) charts[id].destroy();
+            charts[id] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: color,
+                        pointRadius: 5,
+                        tension: 0.3
+                    }]
+                },
+                options: { 
+                    responsive:true, maintainAspectRatio:false,
+                    plugins: { 
+                        legend: {display:false},
+                        datalabels: { align:'top', anchor:'end', color:color, font:{weight:'bold'} }
+                    },
+                    scales: { y: { beginAtZero: true, ticks: {display: false} }, x: { grid: {display: false} } }
+                },
+                plugins: [ChartDataLabels]
+            });
+        }
+
+        // Init
+        const today = new Date().toISOString().slice(0, 7);
+        document.getElementById('dash-month-picker').value = today;
+        document.getElementById('f-month').value = today;
+        document.getElementById('i-date').valueAsDate = new Date();
+        loadDashboard();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ONSITE PRO v8 - Dashboard Viewer</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Sarabun','ui-sans-serif','system-ui'],
+            display: ['Inter','Sarabun','ui-sans-serif']
+          },
+          colors: {
+            maroon: {
+              950: '#3b000f',
+              900: '#560015',
+              850: '#6a001a',
+              800: '#800020',
+              700: '#9e1b32',
+              600: '#c21807',
+              100: '#fce7ea'
+            }
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(2,6,23,.10)',
+            lift: '0 18px 40px rgba(2,6,23,.14)'
+          }
+        }
+      }
+    }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+
+  <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Sarabun:wght@300;400;600;700;800;900&display=swap');
+
+  :root{
+    color-scheme: light;
+    --bg:#f8fafc;
+    --surface:#ffffff;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --border:#e2e8f0;
+    --border2:#cbd5e1;
+    --shadow: 0 12px 30px rgba(2,6,23,.08);
+    --shadow2: 0 6px 16px rgba(2,6,23,.06);
+    --shadow3: 0 2px 8px rgba(2,6,23,.05);
+    --brand:#800020;
+    --brand2:#1e3a8a;
+  }
+
+  body{
+    font-family:'Sarabun', ui-sans-serif, system-ui;
+    background: var(--bg);
+    color: #334155;
+  }
+
+  /* ===== Clean Surfaces ===== */
+  .surface{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow3);
+  }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 22px;
+    box-shadow: var(--shadow2);
+    transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  }
+  .card:hover{
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+    border-color: var(--border2);
+  }
+
+  /* Remove visual overlays from previous theme */
+  .noise::before{ display:none !important; }
+  .app-bg{ background: var(--bg) !important; }
+  .card::after{ display:none !important; }
+  .kpi-card::before{ display:none !important; }
+  .metric::after{ display:none !important; }
+
+  /* Center text in donut */
+  .chart-center-text{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    pointer-events:none;
+  }
+
+  /* Legend pill (clean) */
+  .legend-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:.5rem;
+    padding:.32rem .64rem;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:#fff;
+    box-shadow: 0 1px 4px rgba(2,6,23,.05);
+  }
+
+  /* Badges */
+  .badge{ display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .62rem; border-radius:999px; font-size:11px; font-weight:900; letter-spacing:.08em; }
+  .badge-soft{ background:#f8fafc; border:1px solid var(--border); color:#334155; }
+  .badge-live{ background: rgba(16,185,129,.10); border:1px solid rgba(16,185,129,.22); color:#065f46; }
+  .dot{ width:8px; height:8px; border-radius:999px; background:#10b981; box-shadow: 0 0 0 4px rgba(16,185,129,.16); }
+
+  /* Segmented (clean) */
+  .seg-wrap{
+    display:inline-flex;
+    padding:4px;
+    border-radius:999px;
+    background:#fff;
+    border:1px solid var(--border);
+    box-shadow: 0 1px 6px rgba(2,6,23,.04);
+  }
+  .seg-btn{
+    padding:.50rem 1.00rem;
+    border-radius:999px;
+    font-weight:900;
+    font-size:.90rem;
+    color:#475569;
+    transition: all .14s ease;
+  }
+  .seg-btn:hover{ background:#f1f5f9; }
+  .seg-btn.active{
+    background: #020460;
+    color:#fff;
+  }
+
+  /* Month picker */
+  .month-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    padding:.62rem .9rem;
+    border-radius:18px;
+    border:1px solid var(--border);
+    background:#fff;
+    box-shadow: 0 1px 6px rgba(2,6,23,.04);
+  }
+  .month-input{
+    font-family:'Inter','Sarabun',ui-sans-serif;
+    font-weight:900;
+    font-size:.98rem;
+    color: var(--ink);
+    background: transparent;
+    border:none;
+    outline:none;
+    cursor:pointer;
+  }
+  input[type="month"]::-webkit-calendar-picker-indicator{ opacity:.70; cursor:pointer; }
+
+  /* Metrics */
+  .metric{
+    position:relative;
+    overflow:hidden;
+    padding:14px 14px;
+    border-radius:20px;
+    border:1px solid var(--border);
+    background:#fff;
+    box-shadow: 0 1px 6px rgba(2,6,23,.04);
+  }
+  .metric-label{ font-size:11px; font-weight:900; color: var(--muted); letter-spacing:.14em; text-transform:uppercase; }
+  .metric-value{ margin-top:6px; font-weight:900; color: var(--ink); font-size:28px; font-family:'Inter','Sarabun',ui-sans-serif; }
+  .metric-wide .metric-value{ font-size:18px; }
+
+  /* Modal animation */
+  .fade-in-up{ animation: fadeInUp .16s ease-out both; }
+  @keyframes fadeInUp{ from{ opacity:0; transform: translateY(8px) scale(.99); } to{ opacity:1; transform: translateY(0) scale(1); } }
+
+  /* Scrollbar (light) */
+  ::-webkit-scrollbar{ width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track{ background: #f1f5f9; }
+  ::-webkit-scrollbar-thumb{ background: #cbd5e1; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover{ background: #94a3b8; }
+</style>
+</head>
+
+<body class="min-h-screen bg-slate-50 text-slate-700">
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="fixed inset-0 hidden z-[90]">
+    <div class="absolute inset-0 bg-slate-950/40 -[2px]"></div>
+    <div class="relative h-full w-full flex items-center justify-center">
+      <div class="bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-soft flex items-center gap-3">
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-maroon-100 text-maroon-900">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        </span>
+        <div>
+          <div class="font-extrabold text-slate-800">กำลังโหลดข้อมูล</div>
+          <div class="text-xs text-slate-500">Service_Intelligence_V5 • Device_Log_V5</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="min-h-screen">
+    <div id="page-dash" class="p-5 sm:p-6 lg:p-10 max-w-[1900px] mx-auto space-y-7 pb-24">
+
+            <!-- HERO / HEADER -->
+      <header class="sticky top-3 z-40">
+        <div class="surface rounded-[28px] px-5 py-5 sm:px-7 sm:py-6">
+          <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+            <div class="flex items-center gap-4 min-w-0">
+              <div class="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gradient-to-br from-maroon-900 to-blue-900 text-white flex items-center justify-center shadow-soft ring-1 ring-white/40">
+                <i class="fa-solid fa-chart-pie text-lg"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h1 class="text-xl sm:text-2xl lg:text-3xl font-black tracking-tight text-slate-900 font-display truncate">
+                    (TG) Service Performance Overview
+                  </h1>
+                
+                  <span class="badge badge-live"><span class="dot"></span> LIVE</span>
+                </div>
+                <p class="text-xs sm:text-sm text-slate-500 font-bold">
+                  TigerSoft (1998) Co. Ltd.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <div class="seg-wrap">
+                <button id="btn-issue-month" onclick="setIssueScope('month')" class="seg-btn active">
+                  <i class="fa-regular fa-calendar mr-1"></i> เดือน
+                </button>
+                <button id="btn-issue-year" onclick="setIssueScope('year')" class="seg-btn">
+                  <i class="fa-regular fa-calendar-check mr-1"></i> ปี
+                </button>
+              </div>
+
+              <div class="month-wrap">
+                <div class="text-[11px] text-slate-500 font-extrabold tracking-widest uppercase">เลือกเดือน</div>
+                <input type="month" id="dash-month-picker" onchange="loadDashboard()" class="month-input" />
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div class="metric metric-wide col-span-2 sm:col-span-1">
+              <div class="metric-label">Period</div>
+              <div id="kpi-period" class="metric-value">-</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Total Jobs</div>
+              <div class="metric-value"><span id="kpi-total">0</span></div>
+            </div>
+            <div class="metric metric-free">
+              <div class="metric-label">Free</div>
+              <div class="metric-value"><span id="kpi-free">0</span></div>
+            </div>
+            <div class="metric metric-charge">
+              <div class="metric-label">Charge</div>
+              <div class="metric-value"><span id="kpi-charge">0</span></div>
+            </div>
+            <div class="metric metric-ma">
+              <div class="metric-label">MA</div>
+              <div class="metric-value"><span id="kpi-ma">0</span></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- MAIN KPI CARDS -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <div class="card kpi-card p-6 border-t-[6px] border-maroon-800 cursor-pointer" data-glow="maroon" onclick="showTrendModal('free', 'Onsite-Free รายเดือน', '#10b981')">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <div class="text-[11px] text-slate-500 font-bold tracking-widest uppercase">Onsite</div>
+              <div class="text-lg font-black text-maroon-900">FREE</div>
+            </div>
+            <div class="h-11 w-11 rounded-2xl bg-maroon-100 text-maroon-900 flex items-center justify-center border border-maroon-100">
+              <i class="fa-solid fa-gift"></i>
+            </div>
+          </div>
+
+          <div class="relative h-56 mb-4">
+            <canvas id="d-free"></canvas>
+            <div class="chart-center-text">
+              <p class="text-[10px] uppercase text-slate-400 font-extrabold tracking-widest">Total</p>
+              <p id="sum-free" class="text-4xl font-black text-slate-900">0</p>
+            </div>
+          </div>
+          <div id="legend-free" class="flex flex-wrap justify-center gap-2 text-[11px] font-bold text-slate-600 pt-2"></div>
+        </div>
+
+        <div class="card kpi-card p-6 border-t-[6px] border-blue-800 cursor-pointer" data-glow="blue" onclick="showTrendModal('charge', 'Onsite-Charge รายเดือน', '#f97316')">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <div class="text-[11px] text-slate-500 font-bold tracking-widest uppercase">Onsite</div>
+              <div class="text-lg font-black text-blue-900">CHARGE</div>
+            </div>
+            <div class="h-11 w-11 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center border border-blue-100">
+              <i class="fa-solid fa-dollar-sign"></i>
+            </div>
+          </div>
+
+          <div class="relative h-56 mb-4">
+            <canvas id="d-charge"></canvas>
+            <div class="chart-center-text">
+              <p class="text-[10px] uppercase text-slate-400 font-extrabold tracking-widest">Total</p>
+              <p id="sum-charge" class="text-4xl font-black text-slate-900">0</p>
+            </div>
+          </div>
+          <div id="legend-charge" class="flex flex-wrap justify-center gap-2 text-[11px] font-bold text-slate-600 pt-2"></div>
+        </div>
+
+        <div class="card kpi-card p-6 border-t-[6px] border-slate-500 cursor-pointer" data-glow="slate" onclick="showTrendModal('ma', 'Onsite-MA รายเดือน', '#3b82f6')">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <div class="text-[11px] text-slate-500 font-bold tracking-widest uppercase">Onsite</div>
+              <div class="text-lg font-black text-slate-700">MA</div>
+            </div>
+            <div class="h-11 w-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-100">
+              <i class="fa-solid fa-screwdriver-wrench"></i>
+            </div>
+          </div>
+
+          <div class="relative h-56 mb-4">
+            <canvas id="d-ma"></canvas>
+            <div class="chart-center-text">
+              <p class="text-[10px] uppercase text-slate-400 font-extrabold tracking-widest">Total</p>
+              <p id="sum-ma" class="text-4xl font-black text-slate-900">0</p>
+            </div>
+          </div>
+          <div id="legend-ma" class="flex flex-wrap justify-center gap-2 text-[11px] font-bold text-slate-600 pt-2"></div>
+        </div>
+      </section>
+
+      <!-- YEAR LINES -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-black text-maroon-900 flex items-center gap-2"><i class="fa-solid fa-arrow-trend-up"></i> รายปี (Free)</h3>
+            <span class="text-[11px] font-bold text-slate-500">รวมทั้งปี</span>
+          </div>
+          <div class="h-48"><canvas id="c-annual-free"></canvas></div>
+        </div>
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-black text-blue-900 flex items-center gap-2"><i class="fa-solid fa-arrow-trend-up"></i> รายปี (Charge)</h3>
+            <span class="text-[11px] font-bold text-slate-500">รวมทั้งปี</span>
+          </div>
+          <div class="h-48"><canvas id="c-annual-charge"></canvas></div>
+        </div>
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-black text-slate-700 flex items-center gap-2"><i class="fa-solid fa-arrow-trend-up"></i> รายปี (MA)</h3>
+            <span class="text-[11px] font-bold text-slate-500">รวมทั้งปี</span>
+          </div>
+          <div class="h-48"><canvas id="c-annual-ma"></canvas></div>
+        </div>
+      </section>
+
+      <!-- YEAR BAR + RATIO -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 card p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5">
+            <h3 class="font-black text-maroon-900 flex items-center gap-2"><i class="fa-solid fa-chart-column"></i> สรุปยอดรวมแต่ละเดือน (ปีที่เลือก)</h3>
+            <span class="text-[11px] font-bold text-slate-500"></span>
+          </div>
+          <div class="h-72"><canvas id="c-bar-year"></canvas></div>
+        </div>
+
+        <div class="card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-black text-maroon-900 flex items-center gap-2"><i class="fa-solid fa-chart-pie"></i> สัดส่วนงาน (Ratio)</h3>
+            <span class="text-[11px] font-bold text-slate-500">เดือนที่เลือก</span>
+          </div>
+          <div class="h-60 relative"><canvas id="c-pie-ratio"></canvas></div>
+          <div class="mt-4 text-xs text-slate-500 leading-relaxed">
+            
+          </div>
+        </div>
+      </section>
+
+      <!-- ISSUES -->
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <div class="card p-6 cursor-pointer hover:bg-slate-50" onclick="showDetailModal('Scanner')">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <div class="flex items-center gap-2">
+              <span class="h-9 w-9 rounded-2xl bg-maroon-100 text-maroon-900 flex items-center justify-center">
+                <i class="fa-solid fa-barcode"></i>
+              </span>
+              <div>
+                <div class="font-black text-maroon-900">ปัญหา Scanner</div>
+                <div class="text-[11px] text-slate-500 font-bold">รวมตาม Scope ที่เลือก (เดือน/ปี)</div>
+              </div>
+            </div>
+
+            <span id="issue-period-chip-scan" class="text-[11px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full font-extrabold border border-slate-200">-</span>
+          </div>
+
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-xs text-slate-500">คลิกเพื่อดูรายการ + Export</div>
+            <span class="text-[11px] bg-maroon-100 text-maroon-800 px-3 py-1.5 rounded-full font-extrabold border border-maroon-100">
+              <i class="fa-solid fa-file-excel mr-1"></i>Export
+            </span>
+          </div>
+
+          <div class="relative h-56 mb-4">
+            <canvas id="d-scan"></canvas>
+            <div class="chart-center-text">
+              <p class="text-[10px] uppercase text-slate-400 font-extrabold tracking-widest">Total</p>
+              <p id="sum-scan" class="text-4xl font-black text-slate-900">0</p>
+            </div>
+          </div>
+          <div id="legend-scan" class="flex justify-center gap-2 text-[11px] font-bold text-slate-600"></div>
+        </div>
+
+        <div class="card p-6 cursor-pointer hover:bg-slate-50" onclick="showDetailModal('Power')">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <div class="flex items-center gap-2">
+              <span class="h-9 w-9 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center">
+                <i class="fa-solid fa-plug"></i>
+              </span>
+              <div>
+                <div class="font-black text-blue-900">ปัญหา Power Supply</div>
+                <div class="text-[11px] text-slate-500 font-bold">รวมตาม Scope ที่เลือก (เดือน/ปี)</div>
+              </div>
+            </div>
+
+            <span id="issue-period-chip-power" class="text-[11px] bg-slate-100 text-slate-700 px-3 py-1.5 rounded-full font-extrabold border border-slate-200">-</span>
+          </div>
+
+          <div class="flex items-center justify-between mb-3">
+            <div class="text-xs text-slate-500">คลิกเพื่อดูรายการ + Export</div>
+            <span class="text-[11px] bg-blue-100 text-blue-900 px-3 py-1.5 rounded-full font-extrabold border border-blue-100">
+              <i class="fa-solid fa-file-excel mr-1"></i>Export
+            </span>
+          </div>
+
+          <div class="relative h-56 mb-4">
+            <canvas id="d-power"></canvas>
+            <div class="chart-center-text">
+              <p class="text-[10px] uppercase text-slate-400 font-extrabold tracking-widest">Total</p>
+              <p id="sum-power" class="text-4xl font-black text-slate-900">0</p>
+            </div>
+          </div>
+          <div id="legend-power" class="flex justify-center gap-2 text-[11px] font-bold text-slate-600"></div>
+        </div>
+
+      </section>
+
+      <!-- COMMENT -->
+      <section class="card p-7 sm:p-8 bg-white border-l-[10px] border-maroon-800">
+        <div class="flex items-center justify-between gap-4 mb-4">
+          <h3 class="font-black text-maroon-900 text-lg flex items-center gap-2">
+            <i class="fa-regular fa-comment-dots"></i>
+            Note / Comment ประจำเดือน
+          </h3>
+          <span class="text-[11px] font-bold text-slate-500">แสดงจากฟิลด์ comment</span>
+        </div>
+        <div id="display-comment" class="text-slate-700 whitespace-pre-wrap leading-relaxed bg-white p-6 rounded-2xl border border-slate-100 shadow-inner min-h-[110px]">
+          - รอการบันทึกข้อมูล -
+        </div>
+      </section>
+
+      <div class="text-center text-xs text-slate-400 pt-2">
+        © ONSITE PRO v8 • Dashboard Viewer
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Trend Modal -->
+  <div id="trend-modal" class="fixed inset-0 bg-slate-900/50  hidden z-[60] flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-5xl rounded-[28px] p-6 sm:p-8 relative shadow-2xl fade-in-up border border-slate-200 ">
+      <button onclick="closeModal('trend-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-red-600 text-2xl">
+        <i class="fa-solid fa-circle-xmark"></i>
+      </button>
+      <div class="flex items-center justify-between gap-4 mb-5">
+        <h3 id="trend-modal-title" class="text-2xl font-black text-slate-900 border-l-4 border-blue-600 pl-4">Trend Analysis</h3>
+        <span class="text-[11px] font-bold text-slate-500">เปรียบเทียบรายปี (แยกเส้นตามปี)</span>
+      </div>
+      <div class="h-[420px]"><canvas id="c-trend-line"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div id="detail-modal" class="fixed inset-0 bg-slate-900/50  hidden z-[60] flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-5xl rounded-[28px] p-6 sm:p-8 relative shadow-2xl fade-in-up flex flex-col max-h-[90vh] border border-slate-200 ">
+      <button onclick="closeModal('detail-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-red-600 text-2xl">
+        <i class="fa-solid fa-circle-xmark"></i>
+      </button>
+
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 border-b border-slate-200 pb-4">
+        <div>
+          <h3 id="detail-modal-title" class="text-2xl font-black text-slate-900">Issue Details</h3>
+          <div class="text-xs text-slate-500 font-bold">คลิก Export เพื่อดาวน์โหลด Excel</div>
+        </div>
+        <button onclick="exportModalData()" class="text-sm bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2.5 rounded-2xl shadow-sm">
+          <i class="fa-solid fa-file-excel mr-2"></i>Export
+        </button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 rounded-2xl border border-slate-200">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 sticky top-0 font-extrabold text-slate-600 border-b border-slate-200">
+            <tr>
+              <th class="p-3">Date</th>
+              <th class="p-3">Company</th>
+              <th class="p-3">Model</th>
+              <th class="p-3">Symptom</th>
+              <th class="p-3">Cat</th>
+            </tr>
+          </thead>
+          <tbody id="detail-modal-list" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAK15WTcs88LT-hiYbmh7o_R8T6J90epl0",
+      authDomain: "summary-report-7492c.firebaseapp.com",
+      projectId: "summary-report-7492c",
+      appId: "1:947062377712:web:aaddc9f606a73c09e04635"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let charts = {};
+    let dbSummary = {};
+    let dbCases = [];
+    let currentModalData = [];
+    let currentModalType = '';
+    let issueScope = 'month'; // 'month' | 'year'
+
+    const showLoading = (on) => {
+      const el = document.getElementById('loading-overlay');
+      if(!el) return;
+      if(on) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    };
+
+    window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+
+    window.setIssueScope = (scope) => {
+      issueScope = scope === 'year' ? 'year' : 'month';
+      updateIssueScopeUI();
+      loadDashboard();
+    };
+
+    
+    function updateIssueScopeUI() {
+      const btnM = document.getElementById('btn-issue-month');
+      const btnY = document.getElementById('btn-issue-year');
+      if(!btnM || !btnY) return;
+
+      if(issueScope === 'year') {
+        btnY.classList.add('active');
+        btnM.classList.remove('active');
+      } else {
+        btnM.classList.add('active');
+        btnY.classList.remove('active');
+      }
+    }
+
+    // ---- Helpers ----
+    function renderDonut(id, data, colors, labels, legendId) {
+      const el = document.getElementById(id);
+      if(!el) return;
+      const ctx = el.getContext('2d');
+      if(charts[id]) charts[id].destroy();
+
+      charts[id] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels || [],
+          datasets: [{ data, backgroundColor: colors, borderWidth: 0 }]
+        },
+        options: {
+          cutout: '76%',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      const legendEl = legendId ? document.getElementById(legendId) : null;
+      if(legendEl && labels) {
+        legendEl.innerHTML = labels.map((label, i) => `
+          <span class="legend-pill">
+            <span class="w-2.5 h-2.5 rounded-sm" style="background-color:${colors[i]}"></span>
+            <span>${label}</span>
+          </span>
+        `).join('');
+      }
+    }
+
+    function renderLineChart(id, labels, data, color, label) {
+      const el = document.getElementById(id);
+      if(!el) return;
+      const ctx = el.getContext('2d');
+      if(charts[id]) charts[id].destroy();
+
+      charts[id] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label,
+            data,
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 3,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: color,
+            pointRadius: 5,
+            tension: 0.32
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            datalabels: { align: 'top', anchor: 'end', color: color, font: { weight: 'bold' } }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { display: false }, grid: { color: 'rgba(148,163,184,.20)' } },
+            x: { grid: { display: false } }
+          }
+        },
+        plugins: [ChartDataLabels]
+      });
+    }
+
+    // ---- Dashboard Logic (Read-only) ----
+    window.loadDashboard = async () => {
+      showLoading(true);
+      try {
+        // Fetch summaries
+        const snap = await getDocs(collection(db, 'Service_Intelligence_V5'));
+        dbSummary = {};
+        snap.forEach(d => dbSummary[d.id] = d.data());
+
+        // Annual aggregation
+        const annualStats = {};
+        Object.values(dbSummary).forEach(d => {
+          const yr = d.year;
+          if(!annualStats[yr]) annualStats[yr] = { f:0, c:0, m:0 };
+          annualStats[yr].f += (d.free||[0,0,0]).reduce((a,b)=>a+b,0);
+          annualStats[yr].c += (d.charge||[0,0,0]).reduce((a,b)=>a+b,0);
+          annualStats[yr].m += (d.ma||[0,0,0]).reduce((a,b)=>a+b,0);
+        });
+
+        const years = Object.keys(annualStats).sort();
+        renderLineChart('c-annual-free', years, years.map(y=>annualStats[y].f), '#800020', 'Total Free');
+        renderLineChart('c-annual-charge', years, years.map(y=>annualStats[y].c), '#1e3a8a', 'Total Charge');
+        renderLineChart('c-annual-ma', years, years.map(y=>annualStats[y].m), '#64748b', 'Total MA');
+
+        // Monthly (selected)
+        const picker = document.getElementById('dash-month-picker');
+        const val = picker?.value;
+        if(!val) return;
+        const [selYear] = val.split('-');
+
+        const curData = dbSummary[val] || { charge:[0,0,0], free:[0,0,0], ma:[0,0,0], comment: '- ไม่มีข้อมูล -' };
+        const sumF = (curData.free||[0,0,0]).reduce((a,b)=>a+b,0);
+        const sumC = (curData.charge||[0,0,0]).reduce((a,b)=>a+b,0);
+        const sumM = (curData.ma||[0,0,0]).reduce((a,b)=>a+b,0);
+        const sumAll = sumF + sumC + sumM;
+
+        document.getElementById('sum-free').innerText = sumF;
+        document.getElementById('sum-charge').innerText = sumC;
+        document.getElementById('sum-ma').innerText = sumM;
+        document.getElementById('display-comment').innerText = curData.comment || '- ไม่มีบันทึก -';
+
+        // Header KPIs
+        const kpiPeriod = document.getElementById('kpi-period');
+        if(kpiPeriod) kpiPeriod.innerText = val;
+        const kpiTotal = document.getElementById('kpi-total');
+        if(kpiTotal) kpiTotal.innerText = sumAll;
+        const kpiF = document.getElementById('kpi-free');
+        const kpiC = document.getElementById('kpi-charge');
+        const kpiM = document.getElementById('kpi-ma');
+        if(kpiF) kpiF.innerText = sumF;
+        if(kpiC) kpiC.innerText = sumC;
+        if(kpiM) kpiM.innerText = sumM;
+
+        const freeLabels = ['เช็คอุปกรณ์', 'เปลี่ยนอุปกรณ์', 'ส่งของ/POC'];
+        const chargeLabels = ['ย้ายจุด', 'เช็คระบบ', 'เปลี่ยนอุปกรณ์'];
+        const maLabels = ['MA ประกันอะไหล่', 'MA ตรวจเช็ค', 'MA Survey'];
+
+        renderDonut('d-free', curData.free||[0,0,0], ['#800020', '#b91c1c', '#fecaca'], freeLabels, 'legend-free');
+        renderDonut('d-charge', curData.charge||[0,0,0], ['#1e3a8a', '#3b82f6', '#bfdbfe'], chargeLabels, 'legend-charge');
+        renderDonut('d-ma', curData.ma||[0,0,0], ['#475569', '#94a3b8', '#e2e8f0'], maLabels, 'legend-ma');
+
+        // Yearly bar chart (selected year)
+        const months = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+        const yearData = { c:[], f:[], m:[] };
+        months.forEach(m => {
+          const d = dbSummary[`${selYear}-${m}`];
+          yearData.c.push(d ? (d.charge||[0,0,0]).reduce((a,b)=>a+b,0) : 0);
+          yearData.f.push(d ? (d.free||[0,0,0]).reduce((a,b)=>a+b,0) : 0);
+          yearData.m.push(d ? (d.ma||[0,0,0]).reduce((a,b)=>a+b,0) : 0);
+        });
+
+        const ctxBar = document.getElementById('c-bar-year')?.getContext('2d');
+        if(ctxBar) {
+          if(charts.bar) charts.bar.destroy();
+          charts.bar = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+              labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+              datasets: [
+                { label: 'Free', data: yearData.f, backgroundColor: '#9e1b32', borderRadius: 8 },
+                { label: 'Charge', data: yearData.c, backgroundColor: '#1e3a8a', borderRadius: 8 },
+                { label: 'MA', data: yearData.m, backgroundColor: '#94a3b8', borderRadius: 8 }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom', labels:{ usePointStyle:true, pointStyle:'rectRounded' } }, datalabels: { display: false } },
+              scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,.20)' } }
+              }
+            }
+          });
+        }
+
+        // Ratio pie
+        const ctxPie = document.getElementById('c-pie-ratio')?.getContext('2d');
+        if(ctxPie) {
+          if(charts.pie) charts.pie.destroy();
+          charts.pie = new Chart(ctxPie, {
+            type: 'pie',
+            data: {
+              labels: ['Free','Charge','MA'],
+              datasets: [{
+                data: [sumF, sumC, sumM],
+                backgroundColor: ['#800020', '#1e3a8a', '#a5a5a5'],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'right', labels:{ usePointStyle:true, pointStyle:'circle' } },
+                datalabels: {
+                  color: '#fff',
+                  formatter: (val, ctx) => {
+                    const sum = ctx.chart._metasets?.[ctx.datasetIndex]?.total ?? 0;
+                    if(!sum) return '';
+                    return (val * 100 / sum).toFixed(1) + '%';
+                  }
+                }
+              }
+            },
+            plugins: [ChartDataLabels]
+          });
+        }
+
+        // Issue data for drill-down
+        const caseSnap = await getDocs(collection(db, 'Device_Log_V5'));
+        dbCases = [];
+        let scan = {f:0, c:0}, power = {f:0, c:0};
+
+        const [issueYear] = val.split('-');
+        const prefix = (issueScope === 'year') ? `${issueYear}-` : val;
+
+        const chipScan = document.getElementById('issue-period-chip-scan');
+        const chipPower = document.getElementById('issue-period-chip-power');
+        const chipText = (issueScope === 'year') ? `ปี ${issueYear}` : `เดือน ${val}`;
+        if(chipScan) chipScan.innerText = chipText;
+        if(chipPower) chipPower.innerText = chipText;
+
+        caseSnap.forEach(d => {
+          const c = d.data();
+          c.id = d.id;
+          dbCases.push(c);
+
+          if(c.date && String(c.date).startsWith(prefix)) {
+            const catIsFree = (c.category === 'Free');
+            if(c.type === 'Scanner') catIsFree ? (scan.f += 1) : (scan.c += 1);
+            if(c.type === 'Power') catIsFree ? (power.f += 1) : (power.c += 1);
+          }
+        });
+
+        document.getElementById('sum-scan').innerText = scan.f + scan.c;
+        document.getElementById('sum-power').innerText = power.f + power.c;
+
+        const myColors = ['#42bd41', '#ffb74d'];
+        const scanLabels = ['Free', 'Charge'];
+        renderDonut('d-scan', [scan.f, scan.c], myColors, scanLabels, 'legend-scan');
+        renderDonut('d-power', [power.f, power.c], myColors, scanLabels, 'legend-power');
+
+      } catch (err) {
+        console.error(err);
+        Swal.fire({ icon:'error', title:'โหลดข้อมูลไม่สำเร็จ', text: (err && err.message) ? err.message : 'Unknown error' });
+      } finally {
+        showLoading(false);
+      }
+    };
+
+    // ---- Modals ----
+    window.showTrendModal = (type, title, ignoredColor) => {
+      const modal = document.getElementById('trend-modal');
+      modal.classList.remove('hidden');
+
+      const titleEl = document.getElementById('trend-modal-title');
+      titleEl.innerText = 'COMPARISON TREND ANALYSIS';
+      titleEl.className = 'text-2xl font-black text-slate-900 border-l-4 border-blue-600 pl-4';
+
+      const years = [...new Set(Object.values(dbSummary).map(d => d.year))].sort();
+      const datasets = years.map((yr, index) => {
+        const hue = (index * 137.5) % 360;
+        const color = `hsl(${hue}, 70%, 45%)`;
+        const bgColor = `hsla(${hue}, 70%, 45%, 0.14)`;
+
+        return {
+          label: `Year ${yr}`,
+          data: ['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => {
+            const d = dbSummary[`${yr}-${m}`];
+            return d ? (d[type]||[0,0,0]).reduce((a,b)=>a+b,0) : 0;
+          }),
+          borderColor: color,
+          borderWidth: 3,
+          tension: 0.4,
+          fill: true,
+          backgroundColor: bgColor,
+          pointBackgroundColor: '#ffffff',
+          pointBorderColor: color,
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: color
+        };
+      });
+
+      const ctx = document.getElementById('c-trend-line').getContext('2d');
+      if(charts.trend) charts.trend.destroy();
+
+      charts.trend = new Chart(ctx, {
+        type: 'line',
+        data: { labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: { usePointStyle: true, pointStyle: 'circle', font: { weight: 'bold' }, padding: 18 }
+            },
+            datalabels: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true, grid: { color: 'rgba(148,163,184,.22)' }, ticks: { font: { size: 11 } } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    };
+
+    window.showDetailModal = (type) => {
+      const picker = document.getElementById('dash-month-picker').value;
+      if(dbCases.length === 0) {
+        Swal.fire({ title: 'Loading data...', didOpen: async () => {
+          await loadDashboard();
+          Swal.close();
+          openDetailModalInner(type, picker);
+        }});
+      } else {
+        openDetailModalInner(type, picker);
+      }
+    };
+
+    function openDetailModalInner(type, picker) {
+      document.getElementById('detail-modal').classList.remove('hidden');
+      const [y] = String(picker).split('-');
+      document.getElementById('detail-modal-title').innerText = `${type} Issues • ${(issueScope === 'year') ? ('ปี ' + y) : picker}`;
+      currentModalType = type;
+
+      const prefix = (issueScope === 'year') ? `${y}-` : picker;
+      const filtered = dbCases.filter(c => c.date && String(c.date).startsWith(prefix) && c.type === type);
+      currentModalData = filtered;
+
+      const tbody = document.getElementById('detail-modal-list');
+      tbody.innerHTML = filtered.length ? filtered.map(c => `
+        <tr class="hover:bg-slate-50">
+          <td class="p-3">${c.date}</td>
+          <td class="p-3 font-extrabold">${c.company || ''}</td>
+          <td class="p-3 text-xs">${c.model || ''}</td>
+          <td class="p-3 text-xs text-slate-500">${c.symptom || ''}</td>
+          <td class="p-3">
+            <span class="px-3 py-1.5 rounded-full text-[12px] font-extrabold border ${c.category==='Free'?'bg-green-50 text-green-800 border-green-100':'bg-orange-50 text-orange-800 border-orange-100'}">${c.category || ''}</span>
+          </td>
+        </tr>
+      `).join('') : `<tr><td colspan="5" class="p-5 text-center text-slate-400">${(issueScope === 'year') ? 'ไม่มีข้อมูลในปีนี้' : 'ไม่มีข้อมูลในเดือนนี้'}</td></tr>`;
+    }
+
+    window.exportModalData = () => {
+      if(!window.XLSX) return Swal.fire("Missing Library","XLSX library not loaded","error");
+      if(!currentModalData || currentModalData.length===0) return Swal.fire("No Data","ไม่มีข้อมูลให้ Export","warning");
+      const clean = currentModalData.map(c => ({
+        Date: c.date || "",
+        Company: c.company || "",
+        Model: c.model || "",
+        SN: c.sn || "",
+        Symptom: c.symptom || "",
+        Type: c.type || "",
+        Category: c.category || ""
+      }));
+      const ws = XLSX.utils.json_to_sheet(clean);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Issue_List");
+      const ym = document.getElementById("dash-month-picker")?.value || "";
+      const [y] = String(ym).split('-');
+      const scopeKey = (issueScope === 'year') ? y : ym;
+      const t = currentModalType || 'Issue';
+      XLSX.writeFile(wb, `Issue_Export_${t}_${scopeKey}.xlsx`);
+    };
+
+    // ---- Init ----
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    document.getElementById('dash-month-picker').value = ym;
+    updateIssueScopeUI();
+    loadDashboard();
+  </script>
+</body>
+</html>
