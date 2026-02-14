@@ -218,7 +218,7 @@
     <div class="p-5 sm:p-6 lg:p-10 max-w-[1750px] mx-auto space-y-7 pb-24">
 
       <!-- Header / Toolbar -->
-      <header class="sticky top-3 z-40">
+      
         <div class="surface rounded-[28px] px-5 py-5 sm:px-7 sm:py-6">
           <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5">
             <div class="flex items-center gap-4 min-w-0">
@@ -544,8 +544,10 @@
               <th class="p-3">Date</th>
               <th class="p-3">Company</th>
               <th class="p-3">Model</th>
+              <th class="p-3">SN</th>
+              <th class="p-3">Qty</th>
               <th class="p-3">Symptom</th>
-              <th class="p-3">Cat</th>
+              <th class="p-3">Status</th>
             </tr>
           </thead>
           <tbody id="detail-modal-list" class="divide-y divide-slate-100"></tbody>
@@ -610,6 +612,73 @@
       let py = y, pm = m - 1;
       if(pm <= 0){ pm = 12; py = y - 1; }
       return ymFromParts(py, pm);
+    }
+
+    // ---- Date helpers for Issue logs (support multiple formats) ----
+    function parseDateParts(raw){
+      if(!raw) return null;
+      // Firestore Timestamp -> Date
+      try{ if(typeof raw === 'object' && raw.toDate) raw = raw.toDate(); }catch(e){}
+      if(raw instanceof Date){
+        const y = String(raw.getFullYear());
+        const mo = pad2(raw.getMonth()+1);
+        const da = pad2(raw.getDate());
+        return { y, m: mo, ym: `${y}-${mo}`, iso: `${y}-${mo}-${da}` };
+      }
+      const s = String(raw).trim();
+      if(!s) return null;
+
+      let m;
+      // yyyy-mm-dd (or with time)
+      m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if(m){
+        const y = m[1], mo = pad2(parseInt(m[2],10)), da = pad2(parseInt(m[3],10));
+        return { y, m: mo, ym: `${y}-${mo}`, iso: `${y}-${mo}-${da}` };
+      }
+      // yyyy/mm/dd
+      m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+      if(m){
+        const y = m[1], mo = pad2(parseInt(m[2],10)), da = pad2(parseInt(m[3],10));
+        return { y, m: mo, ym: `${y}-${mo}`, iso: `${y}-${mo}-${da}` };
+      }
+      // dd/mm/yyyy
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if(m){
+        const da = pad2(parseInt(m[1],10)), mo = pad2(parseInt(m[2],10)), y = m[3];
+        return { y, m: mo, ym: `${y}-${mo}`, iso: `${y}-${mo}-${da}` };
+      }
+      // dd-mm-yyyy
+      m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+      if(m){
+        const da = pad2(parseInt(m[1],10)), mo = pad2(parseInt(m[2],10)), y = m[3];
+        return { y, m: mo, ym: `${y}-${mo}`, iso: `${y}-${mo}-${da}` };
+      }
+      return null;
+    }
+
+    function normalizeIssueType(raw){
+      const s = String(raw||'').trim().toLowerCase();
+      if(!s) return '';
+      if(s.includes('scan')) return 'Scanner'; // scanner / scaner / scanning
+      if(s.includes('power') || s.includes('psu') || s.includes('adapter') || s.includes('supply')) return 'Power';
+      return String(raw||'').trim();
+    }
+
+    function normalizeIssueCategory(raw){
+      const s = String(raw||'').trim().toLowerCase();
+      if(!s) return '';
+      if(s.includes('free') || s.includes('ฟรี')) return 'Free';
+      if(s.includes('charge') || s.includes('ชาร์จ') || s.includes('paid')) return 'Charge';
+      return String(raw||'').trim();
+    }
+
+    function readIssueQty(c){
+      const candidates = [c?.qty, c?.quantity, c?.deviceQty, c?.device_qty, c?.amount, c?.count, c?.units];
+      for(const v of candidates){
+        const n = Number(v);
+        if(Number.isFinite(n) && n > 0) return n;
+      }
+      return 1;
     }
 
     function setDelta(elId, cur, prev){
@@ -922,7 +991,6 @@
         let scan = {f:0, c:0}, power = {f:0, c:0};
 
         const [issueYear] = val.split('-');
-        const prefix = (issueScope === 'year') ? `${issueYear}-` : val;
 
         const chipScan = document.getElementById('issue-period-chip-scan');
         const chipPower = document.getElementById('issue-period-chip-power');
@@ -933,21 +1001,39 @@
         const scanCompanies = new Map();
         const powerCompanies = new Map();
 
+        const inScope = (parts) => {
+          if(!parts) return false;
+          if(issueScope === 'year') return String(parts.y) === String(issueYear);
+          return String(parts.ym) === String(val);
+        };
+
         caseSnap.forEach(d => {
           const c = d.data();
           c.id = d.id;
+
+          // Normalize for reliable filtering / totals
+          const parts = parseDateParts(c.date);
+          c.__dateParts = parts;
+          c.__ym = parts ? parts.ym : '';
+          c.__year = parts ? parts.y : '';
+          c.__typeN = normalizeIssueType(c.type);
+          c.__catN = normalizeIssueCategory(c.category);
+          c.__qty = readIssueQty(c);
+
           dbCases.push(c);
 
-          if(c.date && String(c.date).startsWith(prefix)) {
-            const isFree = (c.category === 'Free');
+          if(inScope(parts)) {
             const company = (c.company || '').trim() || 'ไม่ระบุ';
-            if(c.type === 'Scanner'){
-              isFree ? (scan.f += 1) : (scan.c += 1);
-              scanCompanies.set(company, (scanCompanies.get(company)||0) + 1);
+            const qty = c.__qty || 1;
+            const isFree = (c.__catN === 'Free');
+
+            if(c.__typeN === 'Scanner'){
+              isFree ? (scan.f += qty) : (scan.c += qty);
+              scanCompanies.set(company, (scanCompanies.get(company)||0) + qty);
             }
-            if(c.type === 'Power'){
-              isFree ? (power.f += 1) : (power.c += 1);
-              powerCompanies.set(company, (powerCompanies.get(company)||0) + 1);
+            if(c.__typeN === 'Power'){
+              isFree ? (power.f += qty) : (power.c += qty);
+              powerCompanies.set(company, (powerCompanies.get(company)||0) + qty);
             }
           }
         });
@@ -1056,35 +1142,44 @@
       document.getElementById('detail-modal-title').innerText = `${type} Issues • ${(issueScope === 'year') ? ('ปี ' + y) : picker}`;
       currentModalType = type;
 
-      const prefix = (issueScope === 'year') ? `${y}-` : picker;
-      const filtered = dbCases.filter(c => c.date && String(c.date).startsWith(prefix) && c.type === type);
+      const filtered = dbCases.filter(c => {
+        const parts = c.__dateParts || parseDateParts(c.date);
+        if(!parts) return false;
+        const okScope = (issueScope === 'year') ? (String(parts.y) === String(y)) : (String(parts.ym) === String(picker));
+        if(!okScope) return false;
+        const t = c.__typeN || normalizeIssueType(c.type);
+        return t === type;
+      });
       currentModalData = filtered;
 
       const tbody = document.getElementById('detail-modal-list');
       tbody.innerHTML = filtered.length ? filtered.map(c => `
         <tr class="hover:bg-slate-50">
-          <td class="p-3">${c.date}</td>
+          <td class="p-3">${(c.__dateParts||parseDateParts(c.date))?.iso || c.date}</td>
           <td class="p-3 font-extrabold">${c.company || ''}</td>
           <td class="p-3 text-xs">${c.model || ''}</td>
+          <td class="p-3 text-xs text-slate-500">${(c.sn || c.SN || c.serial || '')}</td>
+          <td class="p-3 font-extrabold">${(c.__qty || readIssueQty(c) || 0)}</td>
           <td class="p-3 text-xs text-slate-500">${c.symptom || ''}</td>
           <td class="p-3">
-            <span class="px-3 py-1.5 rounded-full text-[12px] font-extrabold border ${c.category==='Free'?'bg-green-50 text-green-800 border-green-100':'bg-orange-50 text-orange-800 border-orange-100'}">${c.category || ''}</span>
+            <span class="px-3 py-1.5 rounded-full text-[12px] font-extrabold border ${(c.__catN||normalizeIssueCategory(c.category))==='Free'?'bg-green-50 text-green-800 border-green-100':'bg-orange-50 text-orange-800 border-orange-100'}">${(c.__catN||normalizeIssueCategory(c.category)) || ''}</span>
           </td>
         </tr>
-      `).join('') : `<tr><td colspan="5" class="p-5 text-center text-slate-400">${(issueScope === 'year') ? 'ไม่มีข้อมูลในปีนี้' : 'ไม่มีข้อมูลในเดือนนี้'}</td></tr>`;
+      `).join('') : `<tr><td colspan="7" class="p-5 text-center text-slate-400">${(issueScope === 'year') ? 'ไม่มีข้อมูลในปีนี้' : 'ไม่มีข้อมูลในเดือนนี้'}</td></tr>`;
     }
 
     window.exportModalData = () => {
       if(!window.XLSX) return Swal.fire("Missing Library","XLSX library not loaded","error");
       if(!currentModalData || currentModalData.length===0) return Swal.fire("No Data","ไม่มีข้อมูลให้ Export","warning");
       const clean = currentModalData.map(c => ({
-        Date: c.date || "",
-        Company: c.company || "",
-        Model: c.model || "",
-        SN: c.sn || "",
-        Symptom: c.symptom || "",
-        Type: c.type || "",
-        Category: c.category || ""
+        "วันที่": (c.__dateParts||parseDateParts(c.date))?.iso || (c.date || ""),
+        "บริษัท": c.company || "",
+        "รุ่น": c.model || "",
+        "ประเภท": (c.__typeN || normalizeIssueType(c.type)) || "",
+        "Status": (c.__catN || normalizeIssueCategory(c.category)) || "",
+        "อาการ": c.symptom || "",
+        "SN": (c.sn || c.SN || c.serial || ""),
+        "จำนวนอุปกรณ์": c.__qty || readIssueQty(c) || 0
       }));
       const ws = XLSX.utils.json_to_sheet(clean);
       const wb = XLSX.utils.book_new();
